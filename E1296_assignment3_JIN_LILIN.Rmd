@@ -1,0 +1,156 @@
+---
+title: "E1296_assignment3_JIN_LILIN"
+author: "Lilin Jin"
+date: "25/02/2019"
+output: html_document
+---
+
+Using the UNGD corpus, analyse lexical richness and productivity. You can select a country or a sample of countries or years of your choice. Deploy relevant measures from `quanteda` and/or other packages (e.g. `sophistication`). You should read the two articles below (and on the Optional Readings list) in conjunction with Chapter 9 in the Corpus Linguistics textbook.
+
+- Benoit, Kenneth, Kevin Munger, and Arthur Spirling. "Measuring and Explaining Political Sophistication through Textual Complexity." Available at SSRN 3062061 (2018).
+
+- Spirling, Arthur. "Democratization and linguistic complexity: The effect of franchise extension on parliamentary discourse, 1832–1915." The Journal of Politics 78, no. 1 (2016): 120-136.
+
+Formulate your own research question and develop your own research design. Be creative (but don't go crazy with complicated anlaysis!), but treat it as a learning exercise.
+
+#Data
+
+Loading data from the UNGDC data
+
+```{r message=FALSE}
+#Loading packages and data
+library(readtext)
+library(quanteda)
+library(dplyr)
+library(tidyr)
+library(readxl)
+library(stringr)
+```
+
+```{r}
+
+DATA_DIR <- "/Users/lilinjin/Desktop/Hertie Studies/Semester 4/Git_NLP/" 
+
+ungd_files <- readtext(paste0(DATA_DIR, "Converted sessions/*"), 
+                                 docvarsfrom = "filenames", 
+                                 dvsep="_", 
+                                 docvarnames = c("Country", "Session", "Year"))
+
+
+ungd_files$doc_id <- str_replace(ungd_files$doc_id , ".txt", "") %>%
+   str_replace(. , "_\\d{2}", "")
+
+```
+
+##Creating corpus object(s)
+
+```{r}
+ungd_corpus <- corpus(ungd_files, text_field = "text") 
+
+summary(ungd_corpus)
+
+ungd_US <- corpus_subset(ungd_corpus, Country == "USA")
+
+ungd_US_before <- corpus_subset(ungd_US, Year < 1992)
+
+ungd_US_after<- corpus_subset(ungd_US, Year > 1991)
+
+```
+
+```{r}
+#Tokenization and basic pre-processing
+tok_US_before <- tokens(ungd_US_before, what = "word",
+              remove_punct = TRUE,
+              remove_symbols = TRUE,
+              remove_numbers = TRUE,
+              remove_twitter = TRUE,
+              remove_url = TRUE,
+              remove_hyphens = FALSE,
+              verbose = TRUE, 
+              include_docvars = TRUE)
+
+tok_US_after <- tokens(ungd_US_after, what = "word",
+              remove_punct = TRUE,
+              remove_symbols = TRUE,
+              remove_numbers = TRUE,
+              remove_twitter = TRUE,
+              remove_url = TRUE,
+              remove_hyphens = FALSE,
+              verbose = TRUE, 
+              include_docvars = TRUE)
+
+```
+```{r}
+#tokenisation for US during cold war 
+tok_US_be <- tokens_tolower(tok_US_before)
+
+tok_US_bef <- tokens_select(tok_US_be, stopwords("english"), selection = "remove", padding = FALSE)
+
+tok_US_b <- tokens(tok_US_bef, ngrams = c(1:2), include_docvars = TRUE) 
+
+# after cold war 
+tok_US_af <- tokens_tolower(tok_US_after)
+
+tok_US_aft <- tokens_select(tok_US_af, stopwords("english"), selection = "remove", padding = FALSE)
+
+tok_US_a <- tokens(tok_US_aft, ngrams = c(1:2), include_docvars = TRUE) 
+
+```
+
+```{r}
+dfm_US_b <- dfm(tok_US_b)
+dfm_US_a <- dfm(tok_US_a)
+```
+
+```{r}
+# most frequent words during cold war 
+freq_US_before <- textstat_frequency(dfm_US_b)
+
+head(freq_US_before, n=20)
+
+# most frequent words after cold war
+
+freq_US_after <- textstat_frequency(dfm_US_a)
+
+head(freq_US_after, n=20)
+
+```
+According to the frequency tables, "world", "peace" and "United nations" appeared very frequently during the cold war but were not frequently mentioned afterwards. On the other hand, "human" and "weapons" are the new words that entered the most frequent words table after the cold war.
+
+
+```{r}
+# lexical diversity before vs. after
+lexdiv_US_before <- textstat_lexdiv(dfm_US_b)
+head(lexdiv_US_before)
+lexdiv_US_after <- textstat_lexdiv(dfm_US_a)
+head(lexdiv_US_after)
+mean(lexdiv_US_before$TTR)
+mean(lexdiv_US_after$TTR)
+```
+
+```{r}
+# plot the TTR before vs after 
+plot(lexdiv_US_before$TTR, type = 'l', xaxt = 'n', xlab = NULL, ylab = "TTR")
+grid()
+axis(1, at = seq_len(nrow(lexdiv_US_before)), labels = docvars(dfm_US_b, 'Year'))
+
+
+plot(lexdiv_US_after$TTR, type = 'l', xaxt = 'n', xlab = NULL, ylab = "TTR")
+grid()
+axis(1, at = seq_len(nrow(lexdiv_US_after)), labels = docvars(dfm_US_a, 'Year'))
+
+```
+During the cold war, the TTR is on average lower (0.724) than the after-war time(0.731), the lowest appears in year 1978. 
+
+```{r}
+period <- ifelse(docvars(ungd_US, "Year") < 1992, "cold_war", "post_cold_war")
+dfmat <- dfm(ungd_US, groups = period)
+head(tstat <- textstat_keyness(dfmat), 10)
+tail(tstat, 10)
+textplot_keyness(tstat)
+```
+
+According to the keyness score, which measures features that occur differentially across different categories, we can see significant differences in the use of words by the US during and after the cold war."Soviet", "co-operation", "negotiation" are of highly significant usage during the cold war. However, in the post-cold-war era, they were replaced by words such as "people","terrorists", and "Russia", reflecting a shift of the focus of US foreign policy.
+
+
+
